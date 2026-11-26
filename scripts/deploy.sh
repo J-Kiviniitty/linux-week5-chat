@@ -9,7 +9,7 @@
 set -euo pipefail
 
 REVISION="${1:-unknown}"
-APP_DIR=/opt/chatapp
+APP_DIR=/opt/chatapp/app
 VENV=/opt/chatapp/venv
 ENV_FILE=/etc/chatapp/chatapp.env
 SOCKET=/run/chatapp/gunicorn.sock

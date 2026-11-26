@@ -6,7 +6,7 @@ Wants=mariadb.service ollama.service
 [Service]
 User=chatapp
 Group=www-data
-WorkingDirectory=/opt/chatapp
+WorkingDirectory=/opt/chatapp/app
 EnvironmentFile=/etc/chatapp/chatapp.env
 # systemd luo hakemiston /run/chatapp, johon Gunicorn tekee Unix-soketin.
 # Soketti ei voi törmätä muiden sovellusten TCP-portteihin (esim. 8000).
