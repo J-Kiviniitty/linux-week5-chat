@@ -1,32 +1,234 @@
-<!DOCTYPE html>
-<html lang="fi">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Viikko 5 – LLM-chat (CI/CD)</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<!-- data-base = alipolku (esim. /viikko5), jota app.js käyttää API-kutsuissa -->
-<body data-base="{{ request.script_root }}">
-  <main class="chat">
-    <header class="chat__header">
-      <div>
-        <h1>LLM-chat</h1>
-        <p class="chat__meta">Malli: <code>{{ model }}</code> · Nginx → Gunicorn/Flask → Ollama · MariaDB</p>
-      </div>
-      <button type="button" id="new-chat" class="btn btn--ghost">Uusi keskustelu</button>
-    </header>
+<hr>
 
-    <section id="messages" class="chat__messages" aria-live="polite">
-      <p class="chat__empty" id="empty-hint">Kirjoita viesti alle aloittaaksesi keskustelun.</p>
-    </section>
+<h2>Week 5 Documentation</h2>
 
-    <form id="chat-form" class="chat__form" autocomplete="off">
-      <textarea id="message" name="message" rows="2" maxlength="2000"
-                placeholder="Kirjoita viesti… (Enter lähettää, Shift+Enter rivinvaihto)" required></textarea>
-      <button type="submit" id="send" class="btn">Lähetä</button>
-    </form>
-  </main>
-  <script src="{{ url_for('static', filename='app.js') }}"></script>
-</body>
-</html>
+<h3>Links</h3>
+
+<ul>
+    <li>
+        <a href="http://195.148.23.249/viikko5/">
+            Week 5 Chat Application
+        </a>
+    </li>
+
+    <li>
+        <a href="https://github.com/J-Kiviniitty/linux-week5-chat">
+            GitHub Repository
+        </a>
+    </li>
+</ul>
+
+<h3>Request Path</h3>
+
+<pre>
+Browser
+   ↓
+Nginx
+   ↓
+/viikko5/
+   ↓
+Gunicorn (Unix socket)
+   ↓
+Flask
+   ↓
+Ollama (qwen2.5:0.5b)
+
+Flask
+   ↓
+MariaDB (chatapp)
+</pre>
+
+<h3>CI/CD Pipeline</h3>
+
+<p>
+Every push and pull request executes Ruff and Pytest.
+Deployment runs only after successful tests.
+</p>
+
+<pre>
+Push / Pull Request
+        ↓
+Ruff
+        ↓
+Pytest
+        ↓
+Deploy (main branch only)
+        ↓
+Health Check
+</pre>
+
+<p>
+Deployment copies the code to the server, installs dependencies,
+updates the Nginx and systemd configuration, restarts only the
+Week 5 chat application service, and verifies deployment through
+the /viikko5/health endpoint.
+</p>
+
+<h3>Users, Permissions and Secrets</h3>
+
+<ul>
+    <li>Linux application user: <code>chatapp</code></li>
+    <li>Deployment user: <code>ubuntu</code></li>
+    <li>MariaDB database: <code>chatapp</code></li>
+    <li>MariaDB user: <code>chatapp</code></li>
+    <li>Ollama listens only on localhost.</li>
+    <li>Gunicorn listens through a Unix socket.</li>
+    <li>Secrets are stored in <code>/etc/chatapp/chatapp.env</code>.</li>
+    <li>GitHub Actions uses repository secrets for deployment.</li>
+</ul>
+
+<h3>Nginx Integration</h3>
+
+<p>
+The Week 5 application was added through an Nginx snippet under
+the path <code>/viikko5/</code>. Existing applications continue
+to function without modification.
+</p>
+
+<ul>
+    <li>/</li>
+    <li>/viikko2/</li>
+    <li>/viikko3/</li>
+    <li>/viikko4/</li>
+    <li>/viikko5/</li>
+</ul>
+
+<h3>Model Choice</h3>
+
+<p>
+Server resources:
+</p>
+
+<ul>
+    <li>RAM: 7.6 GiB</li>
+    <li>CPU: 4 vCPUs</li>
+    <li>Disk available: 74 GiB</li>
+</ul>
+
+<p>
+The selected local language model is
+<code>qwen2.5:0.5b</code>.
+The model fits comfortably within the available memory and provides
+fast response times on the virtual server.
+</p>
+
+<h3>Week 4 Replication</h3>
+
+<p>
+The Week 5 chat database is not replicated to Server B.
+Week 4 replication was implemented only for the visitor counter database.
+The chat application stores its own conversation history in a dedicated
+MariaDB database on Server A.
+</p>
+
+<h3>Test Results</h3>
+
+<ul>
+    <li>Chat available at /viikko5/: PASS</li>
+    <li>Local Ollama model returns replies: PASS</li>
+    <li>Conversation remains visible after page reload: PASS</li>
+    <li>Private/incognito session starts with empty history: PASS</li>
+    <li>Application server not publicly reachable: PASS</li>
+    <li>Ollama port not publicly reachable: PASS</li>
+    <li>Automatic deployment after push: PASS</li>
+    <li>/viikko5/health returns deployed commit SHA: PASS</li>
+    <li>Failing test prevented deployment: PASS</li>
+    <li>Application and model start after reboot: PASS</li>
+    <li>Pages from previous weeks remain functional: PASS</li>
+</ul>
+
+<h3>Problem Solved</h3>
+
+<p>
+The deployment pipeline initially failed because the Python virtual
+environment had been copied to a different directory. The Gunicorn
+executables still contained references to the original location. The
+problem was solved by rebuilding the virtual environment in the final
+deployment directory and reinstalling dependencies.
+</p>
+
+<h3>Evidence</h3>
+
+<h4>Service Status</h4>
+
+<pre>
+ubuntu@jussinlinux:~$ systemctl status chatapp
+● chatapp.service - LLM-chat (Flask + Gunicorn)
+     Loaded: loaded (/etc/systemd/system/chatapp.service; enabled; preset: enabled)
+     Active: active (running) since Thu 2026-11-26 10:40:49 UTC; 25min ago
+
+ubuntu@jussinlinux:~$ systemctl show chatapp -p User -p Group
+User=chatapp
+Group=www-data
+</pre>
+
+<h4>Application Files and Permissions</h4>
+
+<pre>
+ubuntu@jussinlinux:~$ ls -l /opt/chatapp/app
+total 56
+-rw-r--r-- 1 ubuntu ubuntu  198 Nov 26 10:40 README.md
+-rw-rw-r-- 1 ubuntu ubuntu   41 Nov 26 10:40 REVISION
+drwxrwxr-x 2 ubuntu ubuntu 4096 Nov 25 11:01 __pycache__
+-rw-r--r-- 1 ubuntu ubuntu 4482 Nov 26 10:40 app.py
+-rw-r--r-- 1 ubuntu ubuntu 1918 Nov 26 10:40 db.py
+drwxr-xr-x 5 ubuntu ubuntu 4096 Nov 26 10:40 deploy
+-rw-r--r-- 1 ubuntu ubuntu  150 Nov 26 10:40 pyproject.toml
+-rw-r--r-- 1 ubuntu ubuntu   40 Nov 26 10:40 requirements-dev.txt
+-rw-r--r-- 1 ubuntu ubuntu   61 Nov 26 10:40 requirements.txt
+drwxr-xr-x 2 ubuntu ubuntu 4096 Nov 26 10:40 scripts
+drwxr-xr-x 2 ubuntu ubuntu 4096 Nov 26 10:40 static
+drwxr-xr-x 2 ubuntu ubuntu 4096 Nov 26 10:40 templates
+drwxr-xr-x 3 ubuntu ubuntu 4096 Nov 26 10:40 tests
+
+ubuntu@jussinlinux:~$ ls -l /etc/chatapp/chatapp.env
+-rw-r----- 1 root chatapp 148 Nov 25 12:06 /etc/chatapp/chatapp.env
+</pre>
+
+<h4>Database Permissions</h4>
+
+<pre>
+ Grants for chatapp@localhost:
+ GRANT SELECT, INSERT, UPDATE, DELETE ON `chatapp`.* TO `chatapp`@`localhost`  
+</pre>
+
+<h4>Ollama</h4>
+
+<pre>
+ubuntu@jussinlinux:~$ ollama list
+NAME            ID              SIZE      MODIFIED
+qwen2.5:0.5b    a8b0c5157701    397 MB    25 hours ago
+
+ubuntu@jussinlinux:~$ free -h
+               total        used        free      shared  buff/cache   available
+Mem:           7.6Gi       762Mi       2.9Gi       4.1Mi       4.2Gi       6.8Gi
+Swap:             0B          0B          0B
+</pre>
+
+<h4>Listening Services</h4>
+
+<pre>
+ubuntu@jussinlinux:~$ sudo ss -ltnp
+State          Recv-Q          Send-Q                   Local Address:Port                    Peer Address:Port         Process
+LISTEN         0               4096                           0.0.0.0:22                           0.0.0.0:*             users:(("sshd",pid=953,fd=3),("systemd",pid=1,fd=260))
+LISTEN         0               511                            0.0.0.0:80                           0.0.0.0:*             users:(("nginx",pid=51336,fd=5),("nginx",pid=51335,fd=5),("nginx",pid=51334,fd=5),("nginx",pid=51333,fd=5),("nginx",pid=50234,fd=5))
+LISTEN         0               4096                     127.0.0.53%lo:53                           0.0.0.0:*             users:(("systemd-resolve",pid=541,fd=17))
+LISTEN         0               80                             0.0.0.0:3306                         0.0.0.0:*             users:(("mariadbd",pid=1152,fd=31))
+LISTEN         0               128                          127.0.0.1:8000                         0.0.0.0:*             users:(("python3",pid=34890,fd=3))
+LISTEN         0               4096                        127.0.0.54:53                           0.0.0.0:*             users:(("systemd-resolve",pid=541,fd=19))
+LISTEN         0               4096                         127.0.0.1:11434                        0.0.0.0:*             users:(("ollama",pid=3079,fd=4))
+LISTEN         0               4096                              [::]:22                              [::]:*             users:(("sshd",pid=953,fd=4),("systemd",pid=1,fd=261))
+LISTEN         0               511                               [::]:80                              [::]:*             users:(("nginx",pid=51336,fd=6),("nginx",pid=51335,fd=6),("nginx",pid=51334,fd=6),("nginx",pid=51333,fd=6),("nginx",pid=50234,fd=6))
+</pre>
+
+<h4>CI/CD Evidence</h4>
+
+<p>
+GitHub Actions demonstrates:
+</p>
+
+<ul>
+    <li>Successful deployments after passing tests.</li>
+    <li>An intentionally failing test that prevented deployment.</li>
+    <li>Automatic deployment verification using the health endpoint.</li>
+</ul>
